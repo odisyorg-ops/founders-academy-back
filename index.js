@@ -17,16 +17,26 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 // MIDDLEWARE
 // ==========================================
 // app.use(cors({ origin: process.env.CLIENT_URL }));
+
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:8080",
+  "https://founders-academy-front.vercel.app"
+];
+
 app.use(cors({
-  origin: [
-    "http://localhost:5173", 
-    "http://localhost:8080", 
-    "https://founders-academy-front.vercel.app"
-  ],
+  origin: function (origin, callback) {
+    // allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      return callback(new Error('CORS policy violation'), false);
+    }
+    return callback(null, true);
+  },
+  credentials: true,
   methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
-app.use(express.json());
 
 // =====================
 // MONGODB CONNECTION
@@ -218,3 +228,5 @@ app.post("/api/request-call", async (req, res) => {
 app.get("/", (req, res) => res.send("🚀 Backend is live"));
 
 app.listen(port, () => console.log(`✅ Server running on port ${port}`));
+
+module.exports = app;
