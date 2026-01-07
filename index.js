@@ -16,7 +16,16 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 // ==========================================
 // MIDDLEWARE
 // ==========================================
-app.use(cors({ origin: process.env.CLIENT_URL }));
+// app.use(cors({ origin: process.env.CLIENT_URL }));
+app.use(cors({
+  origin: [
+    "http://localhost:5173", 
+    "http://localhost:8080", 
+    "https://founders-academy-front.vercel.app"
+  ],
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
 app.use(express.json());
 
 // =====================
