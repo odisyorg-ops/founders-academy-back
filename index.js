@@ -17,26 +17,41 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 // MIDDLEWARE
 // ==========================================
 // app.use(cors({ origin: process.env.CLIENT_URL }));
-
+// 1. Define allowed origins
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:8080",
   "https://founders-academy-front.vercel.app"
 ];
 
+// 2. Configure CORS
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:8080",
+  "https://founders-academy-front.vercel.app" // Make sure this is EXACTLY your Vercel URL
+];
+
 app.use(cors({
   origin: function (origin, callback) {
-    // allow requests with no origin (like mobile apps or curl requests)
+    // Allow requests with no origin (like mobile apps or curl)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) === -1) {
-      return callback(new Error('CORS policy violation'), false);
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.log("CORS Blocked Origin:", origin); // This will show in Vercel logs
+      callback(new Error("Not allowed by CORS"));
     }
-    return callback(null, true);
   },
   credentials: true,
   methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
+
+// Add this right below the CORS block - it's the most important part for Vercel
+app.options("*", cors());
+
+app.use(express.json());
 
 // =====================
 // MONGODB CONNECTION
@@ -228,5 +243,4 @@ app.post("/api/request-call", async (req, res) => {
 app.get("/", (req, res) => res.send("🚀 Backend is live"));
 
 app.listen(port, () => console.log(`✅ Server running on port ${port}`));
-
 module.exports = app;
