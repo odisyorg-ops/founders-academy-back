@@ -30,31 +30,31 @@ app.use(cors({
   methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
-// app.options("*", cors());
+app.options("*", cors());
 app.use(express.json());
 
 
-app.use((req, res, next) => {
-  res.setHeader(
-    "Access-Control-Allow-Origin",
-    "https://founders-academy-front.vercel.app"
-  );
-  res.setHeader(
-    "Access-Control-Allow-Methods",
-    "GET, POST, OPTIONS"
-  );
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization"
-  );
+// app.use((req, res, next) => {
+//   res.setHeader(
+//     "Access-Control-Allow-Origin",
+//     "https://founders-academy-front.vercel.app"
+//   );
+//   res.setHeader(
+//     "Access-Control-Allow-Methods",
+//     "GET, POST, OPTIONS"
+//   );
+//   res.setHeader(
+//     "Access-Control-Allow-Headers",
+//     "Content-Type, Authorization"
+//   );
 
-  // VERY IMPORTANT for preflight
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
+//   // VERY IMPORTANT for preflight
+//   if (req.method === "OPTIONS") {
+//     return res.status(200).end();
+//   }
 
-  next();
-});
+//   next();
+// });
 // 1. Define allowed origins
 // const allowedOrigins = [
 //   "http://localhost:5173",
@@ -207,7 +207,8 @@ app.post("/api/verify-session", async (req, res) => {
           return {
             name: item.description,
             // Points to our local download route
-            downloadUrl: `${process.env.LIVE_CLIENT_URL || "http://localhost:3000"}/download/${productInfo.file}`
+            // Points to our local download route
+            downloadUrl: `${process.env.LIVE_CLIENT_URL}/download/${productInfo.file}`
           };
         }
         return null;
