@@ -278,5 +278,5 @@ app.post("/api/request-call", async (req, res) => {
 
 app.get("/", (req, res) => res.send("🚀 Backend is live"));
 
-app.listen(port, () => console.log(`✅ Server running on port ${port}`));
+// app.listen(port, () => console.log(`✅ Server running on port ${port}`));
 module.exports = app;
