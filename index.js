@@ -6,7 +6,7 @@ const path = require("path");
 
 const Stripe = require("stripe");
 const { MongoClient, ServerApiVersion } = require("mongodb");
-const { PRODUCTS, BUNDLES } = require("./products"); 
+const { PRODUCTS, BUNDLES } = require("./products");
 // ^ Ensure your products.js has the 'file' property we added!
 
 const app = express();
@@ -17,7 +17,44 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 // MIDDLEWARE
 // ==========================================
 // app.use(cors({ origin: process.env.CLIENT_URL }));
-app.use(cors({ origin: process.env.LIVE_CLIENT_URL }));
+// app.use(cors({ origin: process.env.LIVE_CLIENT_URL }));
+// app.use(
+//   cors({
+//     origin: process.env.LIVE_CLIENT_URL,
+//     methods: ["GET", "POST", "OPTIONS"],
+//     allowedHeaders: ["Content-Type", "Authorization"],
+//   })
+// );
+app.use(cors({
+  origin: "https://founders-academy-front.vercel.app",
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
+// app.options("*", cors());
+app.use(express.json());
+
+
+app.use((req, res, next) => {
+  res.setHeader(
+    "Access-Control-Allow-Origin",
+    "https://founders-academy-front.vercel.app"
+  );
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET, POST, OPTIONS"
+  );
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization"
+  );
+
+  // VERY IMPORTANT for preflight
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
+  next();
+});
 // 1. Define allowed origins
 // const allowedOrigins = [
 //   "http://localhost:5173",
@@ -31,7 +68,7 @@ app.use(cors({ origin: process.env.LIVE_CLIENT_URL }));
 //   origin: function (origin, callback) {
 //     // Allow requests with no origin (like mobile apps or curl)
 //     if (!origin) return callback(null, true);
-    
+
 //     if (allowedOrigins.includes(origin)) {
 //       callback(null, true);
 //     } else {
@@ -47,7 +84,7 @@ app.use(cors({ origin: process.env.LIVE_CLIENT_URL }));
 // // Add this right below the CORS block - it's the most important part for Vercel
 // app.options("*", cors());
 
-app.use(express.json());
+
 
 // =====================
 // MONGODB CONNECTION
@@ -92,7 +129,7 @@ app.post("/create-checkout-session", async (req, res) => {
         },
         quantity: 1,
       });
-    } 
+    }
     // Individual Items Logic
     else {
       const uniqueIds = [...new Set(items.map((i) => i.id))];
@@ -149,7 +186,7 @@ app.post("/api/verify-session", async (req, res) => {
 
       // B. Save Order to MongoDB (Prevent duplicates)
       const existingOrder = await ordersCollection.findOne({ orderId: session.id });
-      
+
       if (!existingOrder) {
         await ordersCollection.insertOne({
           orderId: session.id,
@@ -165,12 +202,12 @@ app.post("/api/verify-session", async (req, res) => {
       // We map the Stripe "description" (Product Name) back to our local file
       const downloadLinks = session.line_items.data.map(item => {
         const productInfo = findProductByName(item.description);
-        
+
         if (productInfo && productInfo.file) {
           return {
             name: item.description,
             // Points to our local download route
-            downloadUrl: `${process.env.BACKEND_URL || "http://localhost:3000"}/download/${productInfo.file}`
+            downloadUrl: `${process.env.LIVE_CLIENT_URL || "http://localhost:3000"}/download/${productInfo.file}`
           };
         }
         return null;
@@ -192,9 +229,9 @@ app.post("/api/verify-session", async (req, res) => {
 // =====================
 app.get("/download/:filename", (req, res) => {
   const { filename } = req.params;
-  
+
   // Security: Prevent directory traversal (users trying to access ../../)
-  const safeFilename = path.basename(filename); 
+  const safeFilename = path.basename(filename);
   const filePath = path.join(__dirname, "pdfs", safeFilename);
 
   if (!fs.existsSync(filePath)) {
