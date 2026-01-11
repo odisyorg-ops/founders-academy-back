@@ -17,6 +17,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 // MIDDLEWARE
 // ==========================================
 // app.use(cors({ origin: process.env.CLIENT_URL }));
+// app.use(cors({ origin: process.env.LIVE_CLIENT_URL }));
 // 1. Define allowed origins
 const allowedOrigins = [
   "http://localhost:5173",
@@ -25,11 +26,6 @@ const allowedOrigins = [
 ];
 
 // 2. Configure CORS
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:8080",
-  "https://founders-academy-front.vercel.app" // Make sure this is EXACTLY your Vercel URL
-];
 
 app.use(cors({
   origin: function (origin, callback) {
@@ -123,8 +119,10 @@ app.post("/create-checkout-session", async (req, res) => {
       line_items,
       customer_email: email,
       // CRITICAL CHANGE: We pass the session_id back to the success page
-      success_url: `${process.env.CLIENT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.CLIENT_URL}/cart`,
+      // success_url: `${process.env.CLIENT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${process.env.LIVE_CLIENT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+      // cancel_url: `${process.env.CLIENT_URL}/cart`,
+      cancel_url: `${process.env.LIVE_CLIENT_URL}/cart`,
     });
 
     res.json({ url: session.url });
