@@ -62,7 +62,7 @@ let ordersCollection; // Added collection for orders
 
 async function initMongo() {
   try {
-    await client.connect();
+    // await client.connect();
     const db = client.db("founderDB");
     requestsCollection = db.collection("callRequests");
     ordersCollection = db.collection("orders"); // Save orders here
