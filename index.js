@@ -17,35 +17,35 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 // MIDDLEWARE
 // ==========================================
 // app.use(cors({ origin: process.env.CLIENT_URL }));
-// app.use(cors({ origin: process.env.LIVE_CLIENT_URL }));
+app.use(cors({ origin: process.env.LIVE_CLIENT_URL }));
 // 1. Define allowed origins
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:8080",
-  "https://founders-academy-front.vercel.app"
-];
+// const allowedOrigins = [
+//   "http://localhost:5173",
+//   "http://localhost:8080",
+//   "https://founders-academy-front.vercel.app"
+// ];
 
-// 2. Configure CORS
+// // 2. Configure CORS
 
-app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl)
-    if (!origin) return callback(null, true);
+// app.use(cors({
+//   origin: function (origin, callback) {
+//     // Allow requests with no origin (like mobile apps or curl)
+//     if (!origin) return callback(null, true);
     
-    if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      console.log("CORS Blocked Origin:", origin); // This will show in Vercel logs
-      callback(new Error("Not allowed by CORS"));
-    }
-  },
-  credentials: true,
-  methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
-}));
+//     if (allowedOrigins.includes(origin)) {
+//       callback(null, true);
+//     } else {
+//       console.log("CORS Blocked Origin:", origin); // This will show in Vercel logs
+//       callback(new Error("Not allowed by CORS"));
+//     }
+//   },
+//   credentials: true,
+//   methods: ["GET", "POST", "OPTIONS"],
+//   allowedHeaders: ["Content-Type", "Authorization"]
+// }));
 
-// Add this right below the CORS block - it's the most important part for Vercel
-app.options("*", cors());
+// // Add this right below the CORS block - it's the most important part for Vercel
+// app.options("*", cors());
 
 app.use(express.json());
 
