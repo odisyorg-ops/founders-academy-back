@@ -16,7 +16,46 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 // ==========================================
 // MIDDLEWARE
 // ==========================================
-app.use(cors({ origin: process.env.LIVE_CLIENT_URL }));
+// app.use(cors({ origin: process.env.LIVE_CLIENT_URL }));
+const express = require("express");
+const cors = require("cors");
+const app = express();
+
+// 1. Define origins precisely
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://founders-academy-front.vercel.app"
+];
+
+// 2. Configure CORS Options
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps/curl)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.log("CORS Blocked Origin:", origin);
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
+  optionsSuccessStatus: 200 // Some legacy browsers choke on 204
+};
+
+// 3. APPLY CORS FIRST
+app.use(cors(corsOptions));
+
+// 4. MANUAL OPTIONS HANDLING (The "Vercel Fix")
+// This ensures that any OPTIONS request is handled before 
+// it hits any other logic or 401 triggers.
+app.options("*", (req, res) => {
+  res.sendStatus(200);
+});
+
 app.use(express.json());
 
 // =====================
@@ -138,7 +177,7 @@ app.post("/api/verify-session", async (req, res) => {
           return {
             name: item.description,
             // Points to our local download route
-            downloadUrl: `${process.env.LIVE_CLIENT_URL}/download/${productInfo.file}`
+            downloadUrl: `${process.env.BACKEND_URL}/download/${productInfo.file}`
           };
         }
         return null;
