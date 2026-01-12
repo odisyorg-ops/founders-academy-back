@@ -21,7 +21,8 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 // MIDDLEWARE
 // ==========================================
 // app.use(cors({ origin: process.env.LIVE_CLIENT_URL }));
-app.use(cors({ origin: "https://founders-academy-front.vercel.app" }));
+// app.use(cors({ origin: "https://founders-academy-front.vercel.app" }));
+app.use(cors({ origin: "https://www.thefounder.academy" }));
 app.use(express.json());
 
 // =====================
