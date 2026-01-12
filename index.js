@@ -217,7 +217,7 @@ app.post("/api/request-call", async (req, res) => {
       await client.connect();
     }
     
-    const db = client.db("founderDB");
+    const db = client.db("founderAcademy");
     const collection = db.collection("callRequests");
 
     // 3. Perform the insertion
