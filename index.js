@@ -9,7 +9,8 @@ const { MongoClient, ServerApiVersion } = require("mongodb");
 const { PRODUCTS, BUNDLES } = require("./products");
 // ^ Ensure your products.js has the 'file' property we added!
 // At the top of your file, define your production URLs clearly
-const FRONTEND_PROD_URL = "https://founders-academy-front.vercel.app";
+// const FRONTEND_PROD_URL = "https://founders-academy-front.vercel.app";
+const FRONTEND_PROD_URL = "https://www.thefounder.academy";
 const BACKEND_PROD_URL = "https://founders-academy-back-rho.vercel.app";
 
 const app = express();
