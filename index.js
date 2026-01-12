@@ -1,183 +1,155 @@
 const express = require("express");
 const cors = require("cors");
-require("dotenv").config();
-const fs = require("fs");
 const path = require("path");
+const fs = require("fs");
+require("dotenv").config();
 
 const Stripe = require("stripe");
 const { MongoClient, ServerApiVersion } = require("mongodb");
-const { PRODUCTS, BUNDLES } = require("./products"); 
-// ^ Ensure your products.js has the 'file' property we added!
+const { PRODUCTS, BUNDLES } = require("./products");
 
 const app = express();
-const port = process.env.PORT || 3000;
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 // ==========================================
-// MIDDLEWARE
+// 1. CONFIGURATION
 // ==========================================
-// app.use(cors({ origin: process.env.LIVE_CLIENT_URL }));
-const express = require("express");
-const cors = require("cors");
-const app = express();
-
-// 1. Define origins precisely
+// Allow your Frontend URL here
 const allowedOrigins = [
   "http://localhost:5173",
   "https://founders-academy-front.vercel.app"
 ];
 
-// 2. Configure CORS Options
+// Determine URLs for Redirects (Frontend) vs Downloads (Backend)
+// On Vercel, ensure these are set in the Settings -> Environment Variables
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+const BACKEND_URL = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 3000}`;
+
+// ==========================================
+// 2. CORS MIDDLEWARE (Vercel Fixed)
+// ==========================================
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps/curl)
     if (!origin) return callback(null, true);
-
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.log("CORS Blocked Origin:", origin);
+      console.log("Blocked by CORS:", origin);
       callback(new Error("Not allowed by CORS"));
     }
   },
+  credentials: true,
   methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true,
-  optionsSuccessStatus: 200 // Some legacy browsers choke on 204
+  optionsSuccessStatus: 200
 };
 
-// 3. APPLY CORS FIRST
 app.use(cors(corsOptions));
-
-// 4. MANUAL OPTIONS HANDLING (The "Vercel Fix")
-// This ensures that any OPTIONS request is handled before 
-// it hits any other logic or 401 triggers.
-app.options("*", (req, res) => {
-  res.sendStatus(200);
-});
+// Handle OPTIONS preflight explicitly to prevent 401s
+app.options("*", cors(corsOptions));
 
 app.use(express.json());
 
-// =====================
-// MONGODB CONNECTION
-// =====================
+// ==========================================
+// 3. MONGODB CONNECTION (Cached)
+// ==========================================
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.lftgrs4.mongodb.net/?retryWrites=true&w=majority`;
-const client = new MongoClient(uri, {
-  serverApi: { version: ServerApiVersion.v1, strict: true, deprecationErrors: true },
-});
 
-let requestsCollection;
-let ordersCollection; // Added collection for orders
+let cachedClient = null;
+let cachedDb = null;
 
-async function initMongo() {
-  try {
-    await client.connect();
-    const db = client.db("founderDB");
-    requestsCollection = db.collection("callRequests");
-    ordersCollection = db.collection("orders"); // Save orders here
-    console.log("✅ Connected to MongoDB");
-  } catch (err) {
-    console.error("❌ MongoDB connection failed:", err);
+async function connectToDatabase() {
+  if (cachedClient && cachedDb) {
+    return { client: cachedClient, db: cachedDb };
   }
+  const client = new MongoClient(uri, {
+    serverApi: { version: ServerApiVersion.v1, strict: true, deprecationErrors: true },
+  });
+  await client.connect();
+  const db = client.db("founderDB");
+  cachedClient = client;
+  cachedDb = db;
+  console.log("✅ MongoDB Connected");
+  return { client, db };
 }
-initMongo();
 
-// =====================
-// 1. STRIPE CHECKOUT
-// =====================
+// ==========================================
+// 4. STRIPE CHECKOUT
+// ==========================================
 app.post("/create-checkout-session", async (req, res) => {
   try {
     const { items = [], bundleId, email } = req.body;
     let line_items = [];
 
-    // Bundle Logic
+    // Helper to format price
+    const createLineItem = (name, price) => ({
+      price_data: {
+        currency: "gbp",
+        product_data: { name },
+        unit_amount: Math.round(price * 100),
+      },
+      quantity: 1,
+    });
+
     if (bundleId && BUNDLES[bundleId]) {
-      const bundle = BUNDLES[bundleId];
-      line_items.push({
-        price_data: {
-          currency: "gbp",
-          product_data: { name: bundle.name },
-          unit_amount: Math.round(bundle.price * 100),
-        },
-        quantity: 1,
-      });
-    } 
-    // Individual Items Logic
-    else {
+      line_items.push(createLineItem(BUNDLES[bundleId].name, BUNDLES[bundleId].price));
+    } else if (items.length > 0) {
       const uniqueIds = [...new Set(items.map((i) => i.id))];
       uniqueIds.forEach((id) => {
         const product = PRODUCTS[id];
-        if (product) {
-          line_items.push({
-            price_data: {
-              currency: "gbp",
-              product_data: { name: product.name },
-              unit_amount: Math.round(product.price * 100),
-            },
-            quantity: 1,
-          });
-        }
+        if (product) line_items.push(createLineItem(product.name, product.price));
       });
     }
 
-    if (!line_items.length) return res.status(400).json({ error: "No valid items" });
+    if (!line_items.length) return res.status(400).json({ error: "No items selected" });
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       mode: "payment",
       line_items,
       customer_email: email,
-      // CRITICAL CHANGE: We pass the session_id back to the success page
-      success_url: `${process.env.LIVE_CLIENT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.LIVE_CLIENT_URL}/cart`,
+      // Redirect to FRONTEND after payment
+      success_url: `${FRONTEND_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${FRONTEND_URL}/cart`,
     });
 
     res.json({ url: session.url });
   } catch (err) {
-    console.error("Stripe Session Error:", err);
+    console.error("Stripe Error:", err);
     res.status(500).json({ error: err.message });
   }
 });
 
-// =====================
-// 2. VERIFY & GET DOWNLOADS (The New Logic)
-// =====================
+// ==========================================
+// 5. VERIFY PAYMENT & DELIVER DOWNLOADS
+// ==========================================
 app.post("/api/verify-session", async (req, res) => {
   const { sessionId } = req.body;
-
   try {
-    // A. Verify with Stripe
-    const session = await stripe.checkout.sessions.retrieve(sessionId, {
-      expand: ['line_items']
-    });
+    const session = await stripe.checkout.sessions.retrieve(sessionId, { expand: ['line_items'] });
 
     if (session.payment_status === "paid") {
-      const customerEmail = session.customer_details.email;
+      const { db } = await connectToDatabase();
+      const ordersCollection = db.collection("orders");
 
-      // B. Save Order to MongoDB (Prevent duplicates)
       const existingOrder = await ordersCollection.findOne({ orderId: session.id });
-      
       if (!existingOrder) {
         await ordersCollection.insertOne({
           orderId: session.id,
-          email: customerEmail,
+          email: session.customer_details.email,
           amount: session.amount_total / 100,
           items: session.line_items.data.map(i => i.description),
           createdAt: new Date()
         });
-        console.log(`✅ Order saved for ${customerEmail}`);
       }
 
-      // C. Generate Download Links
-      // We map the Stripe "description" (Product Name) back to our local file
       const downloadLinks = session.line_items.data.map(item => {
         const productInfo = findProductByName(item.description);
-        
         if (productInfo && productInfo.file) {
           return {
             name: item.description,
-            // Points to our local download route
-            downloadUrl: `${process.env.BACKEND_URL}/download/${productInfo.file}`
+            // Point to BACKEND for the actual file
+            downloadUrl: `${BACKEND_URL}/download/${productInfo.file}`
           };
         }
         return null;
@@ -185,75 +157,61 @@ app.post("/api/verify-session", async (req, res) => {
 
       return res.json({ success: true, items: downloadLinks });
     }
-
     res.status(400).json({ success: false, message: "Payment not verified" });
-
   } catch (err) {
-    console.error("Verification Error:", err);
-    res.status(500).json({ error: "Server verification failed" });
+    console.error("Verify Error:", err);
+    res.status(500).json({ error: "Verification failed" });
   }
 });
 
-// =====================
-// 3. FILE DOWNLOAD ROUTE
-// =====================
+// ==========================================
+// 6. DOWNLOAD ROUTE
+// ==========================================
 app.get("/download/:filename", (req, res) => {
   const { filename } = req.params;
-  
-  // Security: Prevent directory traversal (users trying to access ../../)
-  const safeFilename = path.basename(filename); 
+  const safeFilename = path.basename(filename);
   const filePath = path.join(__dirname, "pdfs", safeFilename);
 
   if (!fs.existsSync(filePath)) {
-    console.error(`❌ File missing: ${filePath}`);
-    return res.status(404).send("File not found on server.");
+    return res.status(404).send("File not found.");
   }
-
-  // This forces the browser to download the file instead of opening it
   res.download(filePath, safeFilename, (err) => {
     if (err) console.error("Download Error:", err);
   });
 });
 
-// =====================
-// HELPER: Match Name to File
-// =====================
-function findProductByName(name) {
-  // Check Bundles first
-  const bundle = Object.values(BUNDLES).find(b => b.name === name);
-  if (bundle) return bundle;
-
-  // Check Products
-  const product = Object.values(PRODUCTS).find(p => p.name === name);
-  if (product) return product;
-
-  return null;
-}
-
-// =====================
-// OTHER ROUTES
-// =====================
+// ==========================================
+// 7. REQUEST CALL
+// ==========================================
 app.post("/api/request-call", async (req, res) => {
   const { name, email, goals } = req.body;
-  if (!name || !email || !goals) return res.status(400).json({ message: "Fields missing" });
+  if (!name || !email || !goals) return res.status(400).json({ message: "Missing fields" });
 
   try {
-    await requestsCollection.insertOne({ name, email, goals, createdAt: new Date() });
+    const { db } = await connectToDatabase();
+    await db.collection("callRequests").insertOne({ name, email, goals, createdAt: new Date() });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: "Database error" });
   }
 });
 
+// ==========================================
+// HELPERS
+// ==========================================
+function findProductByName(name) {
+  const bundle = Object.values(BUNDLES).find(b => b.name === name);
+  if (bundle) return bundle;
+  const product = Object.values(PRODUCTS).find(p => p.name === name);
+  if (product) return product;
+  return null;
+}
+
 app.get("/", (req, res) => res.send("🚀 Backend is live"));
 
-app.listen(port, () => console.log(`✅ Server running on port ${port}`));
-
-// Export for Vercel
 module.exports = app;
 
-// Only listen if run directly (Localhost), not when imported by Vercel
 if (require.main === module) {
   const port = process.env.PORT || 3000;
-  app.listen(port, () => console.log(`✅ Server running on http://localhost:${port}`));
+  app.listen(port, () => console.log(`✅ Server running on port ${port}`));
 }
