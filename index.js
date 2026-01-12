@@ -6,8 +6,11 @@ const path = require("path");
 
 const Stripe = require("stripe");
 const { MongoClient, ServerApiVersion } = require("mongodb");
-const { PRODUCTS, BUNDLES } = require("./products"); 
+const { PRODUCTS, BUNDLES } = require("./products");
 // ^ Ensure your products.js has the 'file' property we added!
+// At the top of your file, define your production URLs clearly
+const FRONTEND_PROD_URL = "https://founders-academy-front.vercel.app";
+const BACKEND_PROD_URL = "https://founders-academy-back-rho.vercel.app";
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -63,7 +66,7 @@ app.post("/create-checkout-session", async (req, res) => {
         },
         quantity: 1,
       });
-    } 
+    }
     // Individual Items Logic
     else {
       const uniqueIds = [...new Set(items.map((i) => i.id))];
@@ -90,8 +93,10 @@ app.post("/create-checkout-session", async (req, res) => {
       line_items,
       customer_email: email,
       // CRITICAL CHANGE: We pass the session_id back to the success page
-      success_url: `${process.env.LIVE_CLIENT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.LIVE_CLIENT_URL}/cart`,
+      success_url: `${FRONTEND_PROD_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${FRONTEND_PROD_URL}/cart`,
+      // success_url: `${process.env.LIVE_CLIENT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+      // cancel_url: `${process.env.LIVE_CLIENT_URL}/cart`,
     });
 
     res.json({ url: session.url });
@@ -118,7 +123,7 @@ app.post("/api/verify-session", async (req, res) => {
 
       // B. Save Order to MongoDB (Prevent duplicates)
       const existingOrder = await ordersCollection.findOne({ orderId: session.id });
-      
+
       if (!existingOrder) {
         await ordersCollection.insertOne({
           orderId: session.id,
@@ -134,12 +139,14 @@ app.post("/api/verify-session", async (req, res) => {
       // We map the Stripe "description" (Product Name) back to our local file
       const downloadLinks = session.line_items.data.map(item => {
         const productInfo = findProductByName(item.description);
-        
+
         if (productInfo && productInfo.file) {
           return {
             name: item.description,
             // Points to our local download route
-            downloadUrl: `${process.env.BACKEND_URL}/download/${productInfo.file}`
+            downloadUrl: `${BACKEND_PROD_URL}/download/${productInfo.file}`
+            // downloadUrl: `https://founders-academy-back-rho.vercel.app/download/${productInfo.file}`
+            // downloadUrl: `${process.env.BACKEND_URL}/download/${productInfo.file}`
           };
         }
         return null;
@@ -161,9 +168,9 @@ app.post("/api/verify-session", async (req, res) => {
 // =====================
 app.get("/download/:filename", (req, res) => {
   const { filename } = req.params;
-  
+
   // Security: Prevent directory traversal (users trying to access ../../)
-  const safeFilename = path.basename(filename); 
+  const safeFilename = path.basename(filename);
   const filePath = path.join(__dirname, "pdfs", safeFilename);
 
   if (!fs.existsSync(filePath)) {
