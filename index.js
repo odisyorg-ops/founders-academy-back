@@ -40,7 +40,7 @@ let ordersCollection; // Added collection for orders
 
 async function initMongo() {
   try {
-    await client.connect();
+    // await client.connect();
     const db = client.db("founderAcademy");
     requestsCollection = db.collection("callRequests");
     ordersCollection = db.collection("orders"); // Save orders here
@@ -218,7 +218,8 @@ app.post("/api/request-call", async (req, res) => {
     // 2. Ensure DB is connected (Using a helper or the client directly)
     // If you haven't made a getDb helper, you can do this:
     if (!client.topology || !client.topology.isConnected()) {
-      await client.connect();
+      // await client.connect();
+      console.log("mongo connected");
     }
     
     const db = client.db("founderAcademy");
