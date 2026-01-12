@@ -37,7 +37,7 @@ let ordersCollection; // Added collection for orders
 async function initMongo() {
   try {
     await client.connect();
-    const db = client.db("founderDB");
+    const db = client.db("founderAcademy");
     requestsCollection = db.collection("callRequests");
     ordersCollection = db.collection("orders"); // Save orders here
     console.log("✅ Connected to MongoDB");
