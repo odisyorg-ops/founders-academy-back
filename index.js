@@ -204,13 +204,41 @@ function findProductByName(name) {
 // =====================
 app.post("/api/request-call", async (req, res) => {
   const { name, email, goals } = req.body;
-  if (!name || !email || !goals) return res.status(400).json({ message: "Fields missing" });
+
+  // 1. Validation
+  if (!name || !email || !goals) {
+    return res.status(400).json({ message: "Fields missing" });
+  }
 
   try {
-    await requestsCollection.insertOne({ name, email, goals, createdAt: new Date() });
+    // 2. Ensure DB is connected (Using a helper or the client directly)
+    // If you haven't made a getDb helper, you can do this:
+    if (!client.topology || !client.topology.isConnected()) {
+      await client.connect();
+    }
+    
+    const db = client.db("founderDB");
+    const collection = db.collection("callRequests");
+
+    // 3. Perform the insertion
+    await collection.insertOne({ 
+      name, 
+      email, 
+      goals, 
+      createdAt: new Date() 
+    });
+
+    console.log("✅ Call request saved for:", email);
     res.json({ success: true });
+
   } catch (err) {
-    res.status(500).json({ error: "Database error" });
+    // 4. Log the ACTUAL error to Vercel Logs so we can see what's wrong
+    console.error("❌ Database Insert Error:", err.message);
+    
+    res.status(500).json({ 
+      error: "Database error", 
+      details: err.message // Helps you debug in the browser console
+    });
   }
 });
 
