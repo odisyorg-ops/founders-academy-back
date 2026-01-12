@@ -26,7 +26,9 @@ app.use(express.json());
 // =====================
 // MONGODB CONNECTION
 // =====================
-const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.lftgrs4.mongodb.net/founderAcademy?retryWrites=true&w=majority`;
+// const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.lftgrs4.mongodb.net/founderAcademy?retryWrites=true&w=majority`;
+const uri = `mongodb+srv://the_founders:${process.env.DB_PASS}@cluster0.1eyo3nk.mongodb.net/?appName=Cluster0`;
+
 const client = new MongoClient(uri, {
   serverApi: { version: ServerApiVersion.v1, strict: true, deprecationErrors: true },
 });
