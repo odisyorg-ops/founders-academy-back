@@ -4,60 +4,127 @@ require("dotenv").config();
 const fs = require("fs");
 const path = require("path");
 
+
 const Stripe = require("stripe");
 const { MongoClient, ServerApiVersion } = require("mongodb");
 const { PRODUCTS, BUNDLES } = require("./products");
+// ^ Ensure your products.js has the 'file' property we added!
+
 
 const app = express();
-// Note: app.listen is NOT used in Vercel, we export the app instead.
-
-// Initialize Stripe (Check if key exists to prevent crash)
-if (!process.env.STRIPE_SECRET_KEY) {
-  console.error("CRITICAL: STRIPE_SECRET_KEY is missing in Env Vars");
-}
+const port = process.env.PORT || 3000;
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
 
 // ==========================================
 // MIDDLEWARE
 // ==========================================
+// app.use(cors({ origin: process.env.CLIENT_URL }));
+// app.use(cors({ origin: process.env.LIVE_CLIENT_URL }));
+// app.use(
+//   cors({
+//     origin: process.env.LIVE_CLIENT_URL,
+//     methods: ["GET", "POST", "OPTIONS"],
+//     allowedHeaders: ["Content-Type", "Authorization"],
+//   })
+// );
+// app.use(cors({
+//   origin: "https://founders-academy-front.vercel.app",
+//   methods: ["GET", "POST", "OPTIONS"],
+//   allowedHeaders: ["Content-Type", "Authorization"],
+// }));
+// app.options("*", cors());
+// app.use(express.json());
+
+
+
+
+// app.use((req, res, next) => {
+//   res.setHeader(
+//     "Access-Control-Allow-Origin",
+//     "https://founders-academy-front.vercel.app"
+//   );
+//   res.setHeader(
+//     "Access-Control-Allow-Methods",
+//     "GET, POST, OPTIONS"
+//   );
+//   res.setHeader(
+//     "Access-Control-Allow-Headers",
+//     "Content-Type, Authorization"
+//   );
+
+
+//   // VERY IMPORTANT for preflight
+//   if (req.method === "OPTIONS") {
+//     return res.status(200).end();
+//   }
+
+
+//   next();
+// });
+// 1. Define allowed origins
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:8080",
+  "https://founders-academy-front.vercel.app"
+];
+
+
+// // 2. Configure CORS
+
+
 app.use(cors({
-  origin: ["https://founders-academy-front.vercel.app", "http://localhost:5173", "http://localhost:8080"],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+
+
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.log("CORS Blocked Origin:", origin); // This will show in Vercel logs
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true,
   methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true
+  allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
-app.options("*", cors());
+
+// Add this right below the CORS block - it's the most important part for Vercel
+// app.options("*", cors());
 app.use(express.json());
 
+
+
+
 // =====================
-// MONGODB CONNECTION (Serverless Optimized)
+// MONGODB CONNECTION
 // =====================
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.lftgrs4.mongodb.net/?retryWrites=true&w=majority`;
-
 const client = new MongoClient(uri, {
   serverApi: { version: ServerApiVersion.v1, strict: true, deprecationErrors: true },
-  // These options help prevent timeouts in serverless
-  connectTimeoutMS: 10000, 
-  socketTimeoutMS: 45000,
 });
 
+
 let requestsCollection;
-let ordersCollection;
+let ordersCollection; // Added collection for orders
 
-// We use a cached promise to ensure we don't connect multiple times in the same warm instance
-let clientPromise;
 
-async function getDB() {
-  if (!clientPromise) {
-    clientPromise = client.connect();
+async function initMongo() {
+  try {
+    // await client.connect();
+    const db = client.db("founderDB");
+    requestsCollection = db.collection("callRequests");
+    ordersCollection = db.collection("orders"); // Save orders here
+    console.log("✅ Connected to MongoDB");
+  } catch (err) {
+    console.error("❌ MongoDB connection failed:", err);
   }
-  await clientPromise;
-  const db = client.db("founderDB");
-  requestsCollection = db.collection("callRequests");
-  ordersCollection = db.collection("orders");
-  return db;
 }
+initMongo();
+
 
 // =====================
 // 1. STRIPE CHECKOUT
@@ -66,6 +133,7 @@ app.post("/create-checkout-session", async (req, res) => {
   try {
     const { items = [], bundleId, email } = req.body;
     let line_items = [];
+
 
     // Bundle Logic
     if (bundleId && BUNDLES[bundleId]) {
@@ -97,16 +165,22 @@ app.post("/create-checkout-session", async (req, res) => {
       });
     }
 
+
     if (!line_items.length) return res.status(400).json({ error: "No valid items" });
+
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       mode: "payment",
       line_items,
       customer_email: email,
+      // CRITICAL CHANGE: We pass the session_id back to the success page
+      // success_url: `${process.env.CLIENT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
       success_url: `${process.env.LIVE_CLIENT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+      // cancel_url: `${process.env.CLIENT_URL}/cart`,
       cancel_url: `${process.env.LIVE_CLIENT_URL}/cart`,
     });
+
 
     res.json({ url: session.url });
   } catch (err) {
@@ -115,26 +189,28 @@ app.post("/create-checkout-session", async (req, res) => {
   }
 });
 
+
 // =====================
-// 2. VERIFY & GET DOWNLOADS
+// 2. VERIFY & GET DOWNLOADS (The New Logic)
 // =====================
 app.post("/api/verify-session", async (req, res) => {
   const { sessionId } = req.body;
 
-  try {
-    // Ensure DB is connected before trying to use it
-    await getDB();
 
+  try {
     // A. Verify with Stripe
     const session = await stripe.checkout.sessions.retrieve(sessionId, {
       expand: ['line_items']
     });
 
+
     if (session.payment_status === "paid") {
       const customerEmail = session.customer_details.email;
 
-      // B. Save Order to MongoDB
+
+      // B. Save Order to MongoDB (Prevent duplicates)
       const existingOrder = await ordersCollection.findOne({ orderId: session.id });
+
 
       if (!existingOrder) {
         await ordersCollection.insertOne({
@@ -147,23 +223,31 @@ app.post("/api/verify-session", async (req, res) => {
         console.log(`✅ Order saved for ${customerEmail}`);
       }
 
+
       // C. Generate Download Links
+      // We map the Stripe "description" (Product Name) back to our local file
       const downloadLinks = session.line_items.data.map(item => {
         const productInfo = findProductByName(item.description);
+
 
         if (productInfo && productInfo.file) {
           return {
             name: item.description,
+            // Points to our local download route
+            // Points to our local download route
             downloadUrl: `${process.env.LIVE_CLIENT_URL}/download/${productInfo.file}`
           };
         }
         return null;
       }).filter(Boolean);
 
+
       return res.json({ success: true, items: downloadLinks });
     }
 
+
     res.status(400).json({ success: false, message: "Payment not verified" });
+
 
   } catch (err) {
     console.error("Verification Error:", err);
@@ -171,38 +255,49 @@ app.post("/api/verify-session", async (req, res) => {
   }
 });
 
+
 // =====================
 // 3. FILE DOWNLOAD ROUTE
 // =====================
 app.get("/download/:filename", (req, res) => {
   const { filename } = req.params;
+
+
+  // Security: Prevent directory traversal (users trying to access ../../)
   const safeFilename = path.basename(filename);
-  
-  // Vercel specific: Ensure we look in the right place relative to execution
   const filePath = path.join(__dirname, "pdfs", safeFilename);
 
+
   if (!fs.existsSync(filePath)) {
-    console.error(`❌ File missing at path: ${filePath}`);
-    return res.status(404).send("File not found. Please contact support.");
+    console.error(`❌ File missing: ${filePath}`);
+    return res.status(404).send("File not found on server.");
   }
 
+
+  // This forces the browser to download the file instead of opening it
   res.download(filePath, safeFilename, (err) => {
     if (err) console.error("Download Error:", err);
   });
 });
 
+
 // =====================
 // HELPER: Match Name to File
 // =====================
 function findProductByName(name) {
+  // Check Bundles first
   const bundle = Object.values(BUNDLES).find(b => b.name === name);
   if (bundle) return bundle;
 
+
+  // Check Products
   const product = Object.values(PRODUCTS).find(p => p.name === name);
   if (product) return product;
 
+
   return null;
 }
+
 
 // =====================
 // OTHER ROUTES
@@ -211,17 +306,18 @@ app.post("/api/request-call", async (req, res) => {
   const { name, email, goals } = req.body;
   if (!name || !email || !goals) return res.status(400).json({ message: "Fields missing" });
 
+
   try {
-    await getDB(); // Ensure connection
     await requestsCollection.insertOne({ name, email, goals, createdAt: new Date() });
     res.json({ success: true });
   } catch (err) {
-    console.error("DB Error:", err);
     res.status(500).json({ error: "Database error" });
   }
 });
 
+
 app.get("/", (req, res) => res.send("🚀 Backend is live"));
 
-// Export the app for Vercel
+
+// app.listen(port, () => console.log(`✅ Server running on port ${port}`));
 module.exports = app;
