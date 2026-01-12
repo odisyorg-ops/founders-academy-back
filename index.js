@@ -205,10 +205,10 @@ function findProductByName(name) {
 // OTHER ROUTES
 // =====================
 app.post("/api/request-call", async (req, res) => {
-  const { name, email, goals } = req.body;
+  const { name, email, goals, company } = req.body;
 
   // 1. Validation
-  if (!name || !email || !goals) {
+  if (!name || !email || !goals || !company) {
     return res.status(400).json({ message: "Fields missing" });
   }
 
