@@ -226,6 +226,7 @@ app.post("/api/request-call", async (req, res) => {
     await collection.insertOne({ 
       name, 
       email, 
+      company,
       goals, 
       createdAt: new Date() 
     });
